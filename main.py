@@ -8,10 +8,16 @@ import random
 from typing import Tuple
 
 def relu_normalize(p, q):
+    """
+    Construct the modified sampling distribution
+    """
     tmp_dist = torch.relu(p-q)
     return tmp_dist / tmp_dist.sum(dim=-1, keepdim=True)
 
 def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
+    """
+    Perform KV Cache truncation when a draft token is rejected
+    """
     kv_cache = list(kv_cache)
     for i in range(len(kv_cache)):
         kv_cache[i] = list(kv_cache[i])
@@ -20,6 +26,9 @@ def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
     return kv_cache
 
 def logits_adapter(logits: torch.Tensor, temperature: float, top_p: float):
+    """
+    Apply given transformation to the input logits, including temperature scaling and top_p renormalization
+    """
     flag = False
     if logits.ndim==3:
         bsz = logits.shape[0]
@@ -89,7 +98,7 @@ def auto_regressive_sampling(input_prompt: str, model, tokenizer, gen_kwargs: di
 @torch.inference_mode()
 def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k: int, gen_kwargs: dict):
     """
-    Speculative sampling
+    Speculative sampling based on DeepMind's paper(https://arxiv.org/pdf/2302.01318.pdf)
     """
     max_new_tokens = gen_kwargs.get('max_new_tokens', 20)
     top_p = gen_kwargs.get('top_p', 1.0)
@@ -203,14 +212,15 @@ if __name__ == '__main__':
         max_new_tokens=80
     )
 
-    # model path
+    # target model path
     path = '/cpfs01/shared/public/public_hdd/llmeval/model_weights/hf_hub/models--codellama--CodeLlama-34b-Python-hf/snapshots/bf21d9502411be2f59900007374ae9d0c37f0d54/'
-
     model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float16, device_map='auto')
     tokenizer = AutoTokenizer.from_pretrained(path)
     print('HF generation: ', tokenizer.batch_decode(model.generate(input_ids=tokenizer([input_prompt], return_tensors='pt').input_ids.to(model.device), do_sample=True, **gen_kwargs), skip_special_tokens=True)[0])
     o_as = auto_regressive_sampling(input_prompt, model, tokenizer, gen_kwargs=gen_kwargs)
 
+    # draft model path
     draft_path = '/cpfs01/user/rensiyu/ssd/tinyllama-1.1B'
+    # draft_path = '/cpfs01/shared/public/public_hdd/llmeval/model_weights/hf_hub/models--codellama--CodeLlama-7b-Python-hf/snapshots/22962305dcc6cac2cb9d5aa81075e143fbbe1390/'
     draft_model = AutoModelForCausalLM.from_pretrained(draft_path, torch_dtype=torch.float16, device_map='auto')
     o_ss = speculative_sampling(input_prompt, model, draft_model, tokenizer, k=4, gen_kwargs=gen_kwargs)
