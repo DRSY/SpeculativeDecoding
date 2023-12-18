@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -7,13 +8,26 @@ from time import time
 import random
 from typing import Tuple
 
+# ANSI code for different colors
+class Color:
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    PURPLE = '\033[95m'
+    CYAN = '\033[96m'
+
+    @staticmethod
+    def print(content, color: str):
+        print(f"{getattr(Color, color.upper())}{content}{Color.RESET}")
+
 def relu_normalize(p, q):
     """
     Construct the modified sampling distribution
     """
     tmp_dist = torch.relu(p-q)
     return tmp_dist / tmp_dist.sum(dim=-1, keepdim=True)
-
 
 def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
     """
@@ -25,7 +39,6 @@ def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
         kv_cache[i][0] = kv_cache[i][0][:, :, :-truncation_size, :]
         kv_cache[i][1] = kv_cache[i][1][:, :, :-truncation_size, :]
     return kv_cache
-
 
 def logits_adapter(logits: torch.Tensor, temperature: float, top_p: float):
     """
@@ -91,9 +104,10 @@ def auto_regressive_sampling(input_prompt: str, model, tokenizer, gen_kwargs: di
         logits_prev_step = outputs.logits[:, -1, :]
         prob_prev_step = torch.softmax(logits_prev_step / temperature, dim=-1)
     e_time = time()
-    print(f"{n} tokens generated, Speed: {n/(e_time-s_time):.3f} tokens/s")
+    Color.print(f"{'='*20} Auto-regressive decoding {'='*20}:", "RED")
+    Color.print(f"{n} tokens generated, Speed: {n/(e_time-s_time):.3f} tokens/s", "RED")
     decoded_output = tokenizer.decode(prefix_token_lst + output_ids, skip_special_tokens=True)
-    print(f'Auto-regressive output: {decoded_output}')
+    Color.print(f'output: {decoded_output}', "RED")
     return decoded_output
 
 
@@ -197,28 +211,36 @@ def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k
         # sys.stdout.write('\r' + repr(decoded_output))
         # sys.stdout.flush()
     e_time = time()
-    print(f"{n} tokens generated, Speed: {n/(e_time-s_time):.3f} tokens/s")
+    Color.print(f"{'='*20} Speculative decoding {'='*20}:", "GREEN")
+    Color.print(f"{n} tokens generated, Speed: {n/(e_time-s_time):.3f} tokens/s", "GREEN")
     decoded_output = tokenizer.decode(prefix_token_lst + output_ids, skip_special_tokens=True)
-    print(f'Speculative output: {decoded_output}')
-    print(f"Speculative acceptance rate: {acc_tokens / (draft_times*k)*100:.3f}%")
-    print(f"Draft steps: {draft_times*4}")
+    Color.print(f'Output: {decoded_output}', "GREEN")
+    Color.print(f"Acceptance rate: {acc_tokens / (draft_times*k)*100:.3f}%", "GREEN")
     return decoded_output
 
 
 if __name__ == '__main__':
-    # prompt and gen kwargs
-    input_prompt = "Below is a piece of Python code to efficienctly compute the n-th Fibonacci number using cache(a lookup table):\n"
+    parser = ArgumentParser()
+    parser.add_argument("--prompt", type=str, default='Below is a piece of Python code to efficienctly compute the n-th Fibonacci number using cache(a lookup table):\n')
+    parser.add_argument("--temperature", type=float, default=1e-8)
+    parser.add_argument("--top_p", type=float, default=1.0)
+    parser.add_argument("--max_new_tokens", type=int, default=80)
+    args = parser.parse_args()
+
+    # prompt and generation kwargs
+    input_prompt = args.prompt
     print(f"Input prompt: {input_prompt}")
     gen_kwargs = dict(
-        temperature=1e-8,
-        max_new_tokens=80
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_new_tokens=args.max_new_tokens
     )
 
     # target model path
     path = '/cpfs01/shared/public/public_hdd/llmeval/model_weights/hf_hub/models--codellama--CodeLlama-34b-Python-hf/snapshots/bf21d9502411be2f59900007374ae9d0c37f0d54/'
     model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float16, device_map='auto')
     tokenizer = AutoTokenizer.from_pretrained(path)
-    print('HF generation: ', tokenizer.batch_decode(model.generate(input_ids=tokenizer([input_prompt], return_tensors='pt').input_ids.to(model.device), do_sample=True, **gen_kwargs), skip_special_tokens=True)[0])
+    # print('HF generation: ', tokenizer.batch_decode(model.generate(input_ids=tokenizer([input_prompt], return_tensors='pt').input_ids.to(model.device), do_sample=True, **gen_kwargs), skip_special_tokens=True)[0])
     o_as = auto_regressive_sampling(input_prompt, model, tokenizer, gen_kwargs=gen_kwargs)
 
     # draft model path
