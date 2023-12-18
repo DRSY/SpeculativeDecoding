@@ -225,6 +225,7 @@ if __name__ == '__main__':
     parser.add_argument("--temperature", type=float, default=1e-8)
     parser.add_argument("--top_p", type=float, default=1.0)
     parser.add_argument("--max_new_tokens", type=int, default=80)
+    parser.add_argument("--num_draft_tokens", type=int, default=4)
     args = parser.parse_args()
 
     # prompt and generation kwargs
@@ -247,4 +248,4 @@ if __name__ == '__main__':
     draft_path = '/cpfs01/user/rensiyu/ssd/tinyllama-1.1B'
     # draft_path = '/cpfs01/shared/public/public_hdd/llmeval/model_weights/hf_hub/models--codellama--CodeLlama-7b-Python-hf/snapshots/22962305dcc6cac2cb9d5aa81075e143fbbe1390/'
     draft_model = AutoModelForCausalLM.from_pretrained(draft_path, torch_dtype=torch.float16, device_map='auto')
-    o_ss = speculative_sampling(input_prompt, model, draft_model, tokenizer, k=4, gen_kwargs=gen_kwargs)
+    o_ss = speculative_sampling(input_prompt, model, draft_model, tokenizer, k=args.num_draft_tokens, gen_kwargs=gen_kwargs)

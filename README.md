@@ -8,7 +8,8 @@ This repository contains a referential standalone pytorch implementation of auto
 ## Example Usage
 ```bash
 python main.py \
-        --prompt "Below is a piece of Python code to efficienctly compute the n-th Fibonacci number using cache(a lookup table):\n" \
+        --prompt "Below is a piece of Python code to efficienctly compute the n-th Fibonacci number using cache(a lookup table):" \
+        --num_draft_tokens 4 \
         --temperature 1e-8 \
         --top_p 1.0 \
         --max_new_tokens 80
