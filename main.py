@@ -14,6 +14,7 @@ def relu_normalize(p, q):
     tmp_dist = torch.relu(p-q)
     return tmp_dist / tmp_dist.sum(dim=-1, keepdim=True)
 
+
 def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
     """
     Perform KV Cache truncation when a draft token is rejected
@@ -24,6 +25,7 @@ def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
         kv_cache[i][0] = kv_cache[i][0][:, :, :-truncation_size, :]
         kv_cache[i][1] = kv_cache[i][1][:, :, :-truncation_size, :]
     return kv_cache
+
 
 def logits_adapter(logits: torch.Tensor, temperature: float, top_p: float):
     """
