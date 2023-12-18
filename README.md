@@ -3,6 +3,7 @@ This repository contains a referential standalone pytorch implementation of auto
 + Support common sampling strategies such as greedy search, temperature sampling and top-p sampling.
 + Verified output distribution integrity(check this by setting temperature to 1e-8).
 + Verified speed up gain using various target/draft model pairs.
++ Colored visualization
 
 ## Acknowledgement
 Our implementation is based on the version of the following paper from DeepMind:
