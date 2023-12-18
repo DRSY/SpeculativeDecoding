@@ -19,6 +19,24 @@ def truncate_kv_cache(kv_cache: Tuple, truncation_size: int):
         kv_cache[i][1] = kv_cache[i][1][:, :, :-truncation_size, :]
     return kv_cache
 
+def logits_adapter(logits: torch.Tensor, temperature: float, top_p: float):
+    flag = False
+    if logits.ndim==3:
+        bsz = logits.shape[0]
+        l = logits.shape[1]
+        logits = logits.view(-1, logits.shape[-1])
+        flag = True
+    prob = torch.softmax(logits / temperature, dim=-1)
+    sorted_prob, sorted_prob_idx = torch.sort(prob, descending=True, dim=-1)
+    cumsum = torch.cumsum(sorted_prob, dim=-1)
+    mask = (cumsum - sorted_prob) > top_p
+    sorted_prob[mask] = 0.0
+    sorted_prob.div_(sorted_prob.sum(dim=-1, keepdim=True))
+    _, gather_pos = torch.sort(sorted_prob_idx, descending=False, dim=-1)
+    final_prob = torch.gather(sorted_prob, -1, gather_pos)
+    if flag: final_prob = final_prob.view(bsz, l, -1)
+    return final_prob
+
 
 @torch.inference_mode()
 def auto_regressive_sampling(input_prompt: str, model, tokenizer, gen_kwargs: dict):
@@ -83,7 +101,7 @@ def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k
     prefix_token_lst = inputs['input_ids'][0].cpu().numpy().tolist()
     draft_past_key_values, logits = outputs_prefilling.past_key_values, outputs_prefilling.logits
     logits_prev_step = logits[:, -1, :]
-    prob_prev_step = torch.softmax(logits_prev_step / temperature, dim=-1)
+    prob_prev_step = logits_adapter(logits_prev_step, temperature=temperature, top_p=top_p)
 
     # prefill for target model
     tgt_outputs_prefilling = tgt_model(input_ids=inputs['input_ids'][:, :-1], use_cache=True)
@@ -113,7 +131,7 @@ def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k
                 use_cache=True)
             draft_past_key_values = draft_outputs.past_key_values
             draft_logits = draft_outputs.logits[:, -1, :]
-            prob_prev_step = torch.softmax(draft_logits / temperature, dim=-1)
+            prob_prev_step = logits_adapter(draft_logits, temperature=temperature, top_p=top_p)
             draft_prob.append(prob_prev_step)
         draft_times += 1
 
@@ -123,7 +141,8 @@ def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k
         tgt_position_ids = torch.arange(tgt_past_key_values[0][0].shape[2], tgt_past_key_values[0][0].shape[2]+k+1).unsqueeze(0).to(next_draft_token.device)
         tgt_outputs = tgt_model(input_ids=tgt_input_ids, attention_mask=tgt_attention_mask, position_ids=tgt_position_ids, past_key_values=tgt_past_key_values, use_cache=True)
         tgt_past_key_values = tgt_outputs.past_key_values
-        tgt_prob = torch.softmax(tgt_outputs.logits / temperature, dim=-1)
+        tgt_prob = logits_adapter(tgt_outputs.logits, temperature=temperature, top_p=top_p)
+        # tgt_prob = torch.softmax(tgt_outputs.logits / temperature, dim=-1)
         all_accept = True
         for i in range(k):
             tgt_token_prob = tgt_prob[0, i, draft_tokens[i]].cpu().item()
@@ -147,7 +166,7 @@ def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k
                     use_cache=True)
                 draft_past_key_values = draft_outputs.past_key_values
                 draft_logits = draft_outputs.logits[:, -1, :]
-                prob_prev_step = torch.softmax(draft_logits / temperature, dim=-1)
+                prob_prev_step = logits_adapter(draft_logits, temperature=temperature, top_p=top_p)
                 break
         if all_accept:
             acc_tokens += k
@@ -160,7 +179,7 @@ def speculative_sampling(input_prompt: str, tgt_model, draft_model, tokenizer, k
                 use_cache=True)
             draft_past_key_values = draft_outputs.past_key_values
             draft_logits = draft_outputs.logits[:, -1, :]
-            prob_prev_step = torch.softmax(draft_logits / temperature, dim=-1)
+            prob_prev_step = logits_adapter(draft_logits, temperature=temperature, top_p=top_p)
             tgt_prev_token_id = tgt_next_token[0, 0].cpu().item()
             n += (k+1)
         # decoded_output = tokenizer.decode(prefix_token_lst[:-1] + output_ids, skip_special_tokens=True)
