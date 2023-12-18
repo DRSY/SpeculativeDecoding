@@ -5,6 +5,15 @@ This repository contains a referential standalone pytorch implementation of auto
 + Verified speed up gain using various target/draft model pairs.
 + Colored visualization
 
+## Example Usage
+```bash
+python main.py \
+        --prompt "Below is a piece of Python code to efficienctly compute the n-th Fibonacci number using cache(a lookup table):\n" \
+        --temperature 1e-8 \
+        --top_p 1.0 \
+        --max_new_tokens 80
+```
+
 ## Acknowledgement
 Our implementation is based on the version of the following paper from DeepMind:
 ```latex
