@@ -1,5 +1,6 @@
 This repository contains a referential standalone pytorch implementation of auto-regressive decoding and speculative decoding. All in [main.py](./main.py).
 ## Features
++ KV cache management
 + Support common sampling strategies such as greedy search, temperature sampling and top-p sampling.
 + Verified output distribution integrity(check this by setting temperature to 1e-8).
 + Verified speed up gain using various target/draft model pairs.
